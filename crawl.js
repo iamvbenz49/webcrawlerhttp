@@ -1,25 +1,45 @@
 const {JSDOM} = require("jsdom");
 
-async function crawlPage(currentURL){
-    console.log(`actively crawling :${currentURL}`);
+async function crawlPage(baseURL,currentURL,pages){
+    const baseURLObj = new URL(baseURL);
+    const currentURLObj = new URL(currentURL);
+    if(baseURLObj.hostname !== currentURLObj.hostname){
+        return pages;
+    }
 
+    const normalizedURL = normalizeURL(currentURL);
+    
+    if(pages[normalizedURL]>0){
+        pages[normalizedURL]++;
+        return pages;
+    }
+    pages[normalizedURL] = 1;
+    console.log(`actively crawling :${currentURL}`);
+    let htmlBody = "";
     try{
         const resp = await fetch(currentURL);
 
         if(resp.status>399){
             console.log(`error in fetch status code :${resp.status}`);
-            return;
+            return pages;
         }
 
         const contentType = resp.headers.get("content-type");
         if(!contentType.includes("text/html")){
             console.log(`Invalid content type ${contentType}, on page:${currentURL}`);
-            return;
+            return pages;
         }
-        console.log(await resp.text());
+        htmlBody = await resp.text();
+        
     }catch(err){
         console.log(`error in fetch: ${err.message}, on page: ${currentURL}`);
     }
+    const nextURLs = getURLsFromHTML(htmlBody,baseURL);
+
+    for(const nextURL of nextURLs){
+        pages = await crawlPage(baseURL,nextURL,pages);
+    }
+    return pages;
 }
 
 function getURLsFromHTML(htmlBody,baseURL){
